@@ -29,7 +29,7 @@ describe("Registration journey", () => {
   afterEach(() => {
     clearTokens();
     localStorage.clear();
-    vi.restoreAllMocks();
+    vi.clearAllMocks();
   });
 
   it("registers a user from Home and lands them signed in", async () => {
@@ -93,9 +93,15 @@ describe("Registration journey", () => {
 
     await user.click(screen.getByRole("button", { name: /create account/i }));
 
+
     expect(
-      await screen.findByRole("button", { name: /account/i }),
+      await screen.findByRole("link", { name: "Dashboard" }),
     ).toBeInTheDocument();
+
+    expect(
+      screen.queryByRole("link", { name: "Create Account" }),
+    ).not.toBeInTheDocument();
+
     expect(
       fetchMock.mock.calls.some(([input]) =>
         String(input).endsWith("/api/auth/login/"),
@@ -112,7 +118,7 @@ describe("Registration journey", () => {
       if (url.endsWith("/api/auth/register/")) {
         return new Response(
           JSON.stringify({
-            email: ["A user with this email address already exists."],
+            email: ["That email is already registered"],
           }),
           {
             status: 400,
@@ -131,12 +137,10 @@ describe("Registration journey", () => {
     await user.type(screen.getByLabelText(/name/i), "Test User");
     await user.type(screen.getByLabelText(/email/i), "existing@example.com");
     await user.type(screen.getByLabelText(/password/i), "TestPassword123!");
-
     await user.click(screen.getByRole("button", { name: /create account/i }));
-
     expect(
-      await screen.findByText(/a user with this email address already exists/i),
-    ).toBeInTheDocument();
+      await screen.findByRole('alert'),
+    ).toHaveTextContent("That email is already registered");
     expect(
       screen.getByRole("heading", { name: "Create Account" }),
     ).toBeInTheDocument();

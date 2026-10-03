@@ -52,7 +52,7 @@ export async function register(input: RegisterInput): Promise<TokenPair> {
   const existing = await prisma.user.findUnique({ where: { email: input.email } })
   if (existing) {
     throw ApiError.validation({
-      email: ['A user with this email address already exists.'],
+      email: ['That email is already registered'],
     })
   }
 
