@@ -34,9 +34,15 @@ export default function HomePage() {
               Dashboard
             </Button>
           ) : (
-            <Button size="lg" as={Link} to={Path.Login}>
+            <>
+              
+            <Button size="lg" as={Link} to={Path.Register}>
+              Create Account
+            </Button>
+            <Button variant="outline" size="lg" as={Link} to={Path.Login}>
               Sign In
             </Button>
+            </>
           )}
           <Button variant="outline" size="lg" as="a" href={`${API_URL}/api/docs/`} target="_blank" rel="noopener noreferrer">
             API Docs
