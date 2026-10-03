@@ -19,3 +19,16 @@ Object.defineProperty(window, 'matchMedia', {
 afterEach(() => {
   document.body.innerHTML = ''
 })
+
+// Using AbortController and AbortSignal in tests
+if (typeof window !== 'undefined') {
+  Object.defineProperty(window, 'AbortController', {
+    writable: true,
+    value: globalThis.AbortController,
+  })
+
+  Object.defineProperty(window, 'AbortSignal', {
+    writable: true,
+    value: globalThis.AbortSignal,
+  })
+}
