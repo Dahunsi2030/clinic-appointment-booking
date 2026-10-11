@@ -12,10 +12,10 @@ describe('parseApiError', () => {
   it('parses non_field_errors as a general message', () => {
     const result = parseApiError({
       status: 400,
-      error: { non_field_errors: ['Invalid email or password.'] },
+      error: { non_field_errors: ['Those details do not match an account'] },
     })
 
-    expect(result.message).toBe('Invalid email or password.')
+    expect(result.message).toBe('Those details do not match an account')
   })
 
   it('collects field errors', () => {

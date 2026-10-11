@@ -16,9 +16,11 @@ const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
 // Internal state
 let currentUser: AuthUser | null = null;
 let authListeners: Array<(user: AuthUser | null) => void> = [];
+let authInitialized = false;
 
 function notifyListeners(user: AuthUser | null) {
   currentUser = user;
+  authInitialized = true;
   authListeners.forEach((cb) => cb(user));
 }
 
@@ -52,13 +54,15 @@ function toAuthError(error: unknown): AuthError {
 
 async function apiFetch(path: string, options: RequestInit = {}): Promise<any> {
   const response = await fetch(`${API_URL}${path}`, {
+    ...options,
+    credentials: "include",
     headers: {
       "Content-Type": "application/json",
       ...(getAccessToken()
         ? { Authorization: `Bearer ${getAccessToken()}` }
         : {}),
+      ...options.headers,
     },
-    ...options,
   });
 
   const data = await response.json().catch(() => null);
@@ -85,10 +89,27 @@ export function createAuthAdapter(): AuthAdapter {
   // Try to restore session on init
   (async () => {
     try {
-      if (getAccessToken()) {
-        const user = await fetchCurrentUser();
-        notifyListeners(user);
+      if (!getAccessToken()) {
+        const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:8000'}/api/auth/refresh/`,
+          {
+            method: "POST",
+            credentials: 'include',
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({}),
+          },
+        );
+
+        if (!response.ok) {
+          notifyListeners(null);
+          return;
+        }
+
+        const data = await response.json();
+        setTokens(data.access);
       }
+
+      const user = await fetchCurrentUser();
+      notifyListeners(user);
     } catch {
       clearTokens();
       notifyListeners(null);
@@ -103,7 +124,7 @@ export function createAuthAdapter(): AuthAdapter {
           body: JSON.stringify({ email, password }),
         });
 
-        setTokens(data.access, data.refresh);
+        setTokens(data.access);
         const user = await fetchCurrentUser();
         notifyListeners(user);
 
@@ -129,7 +150,7 @@ export function createAuthAdapter(): AuthAdapter {
           }),
         });
 
-        setTokens(data.access, data.refresh);
+        setTokens(data.access);
         const user = await fetchCurrentUser();
         notifyListeners(user);
 
@@ -197,7 +218,9 @@ export function createAuthAdapter(): AuthAdapter {
     onAuthStateChanged(callback: (user: AuthUser | null) => void): () => void {
       authListeners.push(callback);
       // Fire immediately with current state
-      callback(currentUser);
+      if (authInitialized) {
+        callback(currentUser);
+      }
 
       return () => {
         authListeners = authListeners.filter((cb) => cb !== callback);

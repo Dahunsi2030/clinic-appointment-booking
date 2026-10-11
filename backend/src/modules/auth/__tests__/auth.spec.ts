@@ -7,6 +7,14 @@ import {
   TEST_PASSWORD,
 } from '../../../__tests__/test-utils.js'
 
+function getSetCookieValues(value: unknown): string[] {
+  if (typeof value === 'string') return [value]
+  if (Array.isArray(value)) {
+    return value.filter((cookie): cookie is string => typeof cookie === 'string')
+  }
+  return []
+}
+
 describe('POST /api/auth/register/', () => {
   it('creates an account and returns a token pair', async () => {
     const response = await api().post('/api/auth/register/').send({
@@ -19,8 +27,16 @@ describe('POST /api/auth/register/', () => {
     expect(response.status).toBe(201)
     expect(response.body).toEqual({
       access: expect.any(String),
-      refresh: expect.any(String),
     })
+
+    const cookies = getSetCookieValues(response.headers['set-cookie'])
+    expect(cookies).not.toHaveLength(0)
+    expect(
+      cookies.some(
+        (cookie) =>
+          cookie.includes('refresh_token=') && /httponly/i.test(cookie),
+      ),
+    ).toBe(true)
 
     const user = await prisma.user.findUnique({ where: { email: 'new@example.com' } })
     expect(user).not.toBeNull()
@@ -63,8 +79,13 @@ describe('POST /api/auth/login/', () => {
       .send({ email: 'user@example.com', password: TEST_PASSWORD })
 
     expect(response.status).toBe(200)
-    expect(response.body.access).toEqual(expect.any(String))
-    expect(response.body.refresh).toEqual(expect.any(String))
+    expect(response.body).toEqual({
+      access: expect.any(String),
+    })
+
+    const cookies = getSetCookieValues(response.headers['set-cookie'])
+    expect(cookies.some((value) => value.includes('refresh_token='))).toBe(true)
+    expect(cookies.some((value) => /httponly/i.test(value))).toBe(true)
   })
 
   it('reports a bad password as a non-field error', async () => {
@@ -75,7 +96,7 @@ describe('POST /api/auth/login/', () => {
       .send({ email: 'user@example.com', password: 'wrong-password' })
 
     expect(response.status).toBe(400)
-    expect(response.body.non_field_errors).toEqual(['Invalid email or password.'])
+    expect(response.body.non_field_errors).toEqual(['Those details do not match an account'])
   })
 
   it('does not reveal whether an account exists', async () => {
@@ -84,7 +105,7 @@ describe('POST /api/auth/login/', () => {
       .send({ email: 'nobody@example.com', password: TEST_PASSWORD })
 
     expect(response.status).toBe(400)
-    expect(response.body.non_field_errors).toEqual(['Invalid email or password.'])
+    expect(response.body.non_field_errors).toEqual(['Those details do not match an account'])
   })
 
   it('rejects a disabled account', async () => {
@@ -185,19 +206,31 @@ describe('POST /api/auth/change-password/', () => {
 })
 
 describe('POST /api/auth/refresh/', () => {
-  it('exchanges a refresh token for a new pair', async () => {
+  it('exchanges the HttpOnly refresh cookie for a new access token', async () => {
     const user = await createUser()
     const login = await api()
       .post('/api/auth/login/')
       .send({ email: user.email, password: TEST_PASSWORD })
 
+    const refreshCookie = getSetCookieValues(login.headers['set-cookie'])
+      .find((value) => value.startsWith('refresh_token='))
+      ?.split(';', 1)[0]
+    expect(refreshCookie).toBeDefined()
+    if (!refreshCookie) throw new Error('Login did not set a refresh-token cookie')
+
     const response = await api()
       .post('/api/auth/refresh/')
-      .send({ refresh: login.body.refresh })
+      .set('Cookie', refreshCookie)
+      .send({})
 
     expect(response.status).toBe(200)
-    expect(response.body.access).toEqual(expect.any(String))
-    expect(response.body.refresh).toEqual(expect.any(String))
+    expect(response.body).toEqual({
+      access: expect.any(String),
+    })
+
+    const refreshedCookies = getSetCookieValues(response.headers['set-cookie'])
+    expect(refreshedCookies.some((value) => value.includes('refresh_token='))).toBe(true)
+    expect(refreshedCookies.some((value) => /httponly/i.test(value))).toBe(true)
   })
 
   it('401s on a bad refresh token', async () => {

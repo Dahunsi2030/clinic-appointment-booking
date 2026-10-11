@@ -11,12 +11,61 @@ import type { Request, Response } from 'express'
 import { requireUser } from '../../middleware/authenticate.js'
 import * as authService from './auth.service.js'
 
+
+const REFRESH_COOKIE = "refresh_token";
+const REFRESH_COOKIE_PATH = "/api/auth/";
+
+const refreshCookieOptions = {
+  httpOnly: true,
+  secure: process.env.NODE_ENV === "production",
+  sameSite: "lax" as const,
+  path: REFRESH_COOKIE_PATH,
+};
+
+function setRefreshCookie(res: Response, refresh: string) {
+  res.cookie(REFRESH_COOKIE, refresh, {
+    ...refreshCookieOptions,
+    // Match the backend's configured refresh-token lifetime.
+    maxAge: 7 * 24 * 60 * 60 * 1000,
+  });
+}
+
+function clearRefreshCookie(res: Response) {
+  res.clearCookie(REFRESH_COOKIE, refreshCookieOptions);
+}
+
+function readRefreshCookie(req: Request): string | undefined {
+  const cookieHeader = req.headers.cookie;
+  if (!cookieHeader) return undefined;
+
+  const prefix = `${REFRESH_COOKIE}=`;
+  const entry = cookieHeader
+    .split(";")
+    .map((cookie) => cookie.trim())
+    .find((cookie) => cookie.startsWith(prefix));
+
+  if (!entry) return undefined;
+
+  try {
+    return decodeURIComponent(entry.slice(prefix.length));
+  } catch {
+    return undefined;
+  }
+}
+
+
 export async function login(req: Request, res: Response): Promise<void> {
-  res.json(await authService.login(req.body))
+  const tokens = await authService.login(req.body);
+
+  setRefreshCookie(res, tokens.refresh);
+  res.json({ access: tokens.access });
 }
 
 export async function register(req: Request, res: Response): Promise<void> {
-  res.status(201).json(await authService.register(req.body))
+  const tokens = await authService.register(req.body);
+
+  setRefreshCookie(res, tokens.refresh);
+  res.status(201).json({ access: tokens.access });
 }
 
 export async function me(req: Request, res: Response): Promise<void> {
@@ -45,11 +94,30 @@ export async function resetPassword(_req: Request, res: Response): Promise<void>
 }
 
 export async function logout(_req: Request, res: Response): Promise<void> {
-  // Tokens are stateless. Add a revocation list here if you need refresh
-  // tokens to stop working the moment a user signs out.
-  res.json({ detail: 'Successfully logged out.' })
+  clearRefreshCookie(res);
+  res.json({ detail: "Successfully logged out." });
 }
 
+
 export async function refresh(req: Request, res: Response): Promise<void> {
-  res.json(authService.refreshTokens(req.body.refresh))
+  const refreshToken =
+    readRefreshCookie(req) ??
+    (typeof req.body?.refresh === "string" ? req.body.refresh : undefined);
+
+  if (!refreshToken) {
+    res.status(401).json({ detail: "Refresh token required." });
+    return;
+  }
+
+  try {
+    const tokens = authService.refreshTokens(refreshToken);
+
+    setRefreshCookie(res, tokens.refresh);
+    res.json({ access: tokens.access });
+  } catch {
+    clearRefreshCookie(res);
+    res.status(401).json({
+      detail: "Invalid or expired refresh token.",
+    });
+  }
 }

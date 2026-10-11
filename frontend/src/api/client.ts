@@ -19,26 +19,17 @@ export const client = createClient({
 
 // In-memory token storage (more secure than localStorage)
 let accessToken: string | null = null
-let refreshToken: string | null = null
 
-export function setTokens(access: string | null, refresh?: string | null) {
+export function setTokens(access: string | null) {
   accessToken = access
-  if (refresh !== undefined) {
-    refreshToken = refresh
-  }
 }
 
 export function getAccessToken(): string | null {
   return accessToken
 }
 
-export function getRefreshToken(): string | null {
-  return refreshToken
-}
-
 export function clearTokens() {
   accessToken = null
-  refreshToken = null
 }
 
 // Auth interceptor — attach JWT to every request
@@ -66,28 +57,34 @@ client.interceptors.request.use((request) => {
 let isRefreshing = false
 let refreshPromise: Promise<boolean> | null = null
 
-async function attemptTokenRefresh(): Promise<boolean> {
-  if (!refreshToken) return false
 
+async function attemptTokenRefresh(): Promise<boolean> {
   try {
     const response = await fetch(
       `${import.meta.env.VITE_API_URL || 'http://localhost:8000'}/api/auth/refresh/`,
       {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ refresh: refreshToken }),
-      }
+        credentials: 'include',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({}),
+      },
     )
 
     if (!response.ok) return false
 
     const data = await response.json()
-    setTokens(data.access, data.refresh)
+
+    if (typeof data.access !== 'string') return false
+
+    setTokens(data.access)
     return true
   } catch {
     return false
   }
 }
+
 
 client.interceptors.response.use(async (response) => {
   if (response.status === 401 && !response.url.includes('/api/auth/refresh/')) {

@@ -39,7 +39,7 @@ export async function login({ email, password }: LoginInput): Promise<TokenPair>
   const valid = await verifyPassword(password, user?.password ?? DUMMY_PASSWORD_HASH)
 
   if (!user || !valid) {
-    throw ApiError.nonField('Invalid email or password.')
+    throw ApiError.nonField('Those details do not match an account')
   }
   if (!user.is_active) {
     throw ApiError.nonField('User account is disabled.')

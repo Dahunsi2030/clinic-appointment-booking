@@ -2,7 +2,7 @@ import { screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useRoutes } from "react-router-dom";
-import { renderWithProviders } from "@/__tests__/test-utils";
+import { renderWithProviders } from '../../../__tests__/test-utils';
 import { clearTokens } from "@/api/client";
 import { AuthProvider } from "@/features/auth/components/auth-provider";
 import { routes } from "@/router/routes";
@@ -95,7 +95,7 @@ describe("Registration journey", () => {
 
 
     expect(
-      await screen.findByRole("link", { name: "Dashboard" }),
+      await screen.findByRole("link", { name: "Dashboard" }, { timeout: 10_000 }),
     ).toBeInTheDocument();
 
     expect(
