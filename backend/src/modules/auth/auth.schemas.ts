@@ -90,7 +90,7 @@ export const ResetPasswordSchema = z
 
 export const RefreshSchema = z
   .object({
-    refresh: z.string().min(1, 'This field may not be blank.'),
+    refresh: z.string().min(1, 'This field may not be blank.').optional(),
   })
   .openapi('Refresh')
 

@@ -17,28 +17,27 @@ export const client = createClient({
   baseUrl: import.meta.env.VITE_API_URL || 'http://localhost:8000',
 })
 
+const retryRequests = new WeakMap<Request, Request>()
+
 // In-memory token storage (more secure than localStorage)
 let accessToken: string | null = null
-let refreshToken: string | null = null
 
-export function setTokens(access: string | null, refresh?: string | null) {
+let onAuthSessionExpired: (() => void) | null = null
+
+export function setAuthSessionExpiredHandler(handler: (() => void) | null) {
+  onAuthSessionExpired = handler
+}
+
+export function setTokens(access: string | null) {
   accessToken = access
-  if (refresh !== undefined) {
-    refreshToken = refresh
-  }
 }
 
 export function getAccessToken(): string | null {
   return accessToken
 }
 
-export function getRefreshToken(): string | null {
-  return refreshToken
-}
-
 export function clearTokens() {
   accessToken = null
-  refreshToken = null
 }
 
 // Auth interceptor — attach JWT to every request
@@ -67,44 +66,73 @@ let isRefreshing = false
 let refreshPromise: Promise<boolean> | null = null
 
 async function attemptTokenRefresh(): Promise<boolean> {
-  if (!refreshToken) return false
-
   try {
     const response = await fetch(
       `${import.meta.env.VITE_API_URL || 'http://localhost:8000'}/api/auth/refresh/`,
       {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ refresh: refreshToken }),
-      }
+        credentials: 'include',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({}),
+      },
     )
 
     if (!response.ok) return false
 
     const data = await response.json()
-    setTokens(data.access, data.refresh)
+
+    if (typeof data.access !== 'string') return false
+
+    setTokens(data.access)
     return true
   } catch {
     return false
   }
 }
 
-client.interceptors.response.use(async (response) => {
-  if (response.status === 401 && !response.url.includes('/api/auth/refresh/')) {
-    if (!isRefreshing) {
-      isRefreshing = true
-      refreshPromise = attemptTokenRefresh().finally(() => {
-        isRefreshing = false
-        refreshPromise = null
-      })
-    }
-
-    const refreshed = await refreshPromise
-    if (!refreshed) {
-      clearTokens()
-      window.dispatchEvent(new CustomEvent('auth:logout'))
-    }
+export async function refreshAccessToken(): Promise<boolean> {
+  if (!isRefreshing) {
+    isRefreshing = true;
+    refreshPromise = attemptTokenRefresh().finally(() => {
+      isRefreshing = false;
+      refreshPromise = null;
+    });
   }
-  return response
+
+  return refreshPromise!;
+}
+
+client.interceptors.response.use(async (response, request) => {
+  if (
+    response.status !== 401 ||
+    response.url.includes('/api/auth/refresh/') ||
+    request.url.includes('/api/auth/refresh/')
+  ) {
+    return response
+  }
+
+  const refreshed = await refreshAccessToken()
+
+  if (!refreshed || !accessToken) {
+    clearTokens()
+    onAuthSessionExpired?.()
+    return response
+  }
+
+  const retryRequest = retryRequests.get(request)
+
+  if (!retryRequest) {
+    return response
+  }
+
+  retryRequest.headers.set('Authorization', `Bearer ${accessToken}`)
+
+  return fetch(retryRequest)
 })
 
+client.interceptors.request.use((request) => {
+  retryRequests.set(request, request.clone())
+  return request
+})

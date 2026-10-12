@@ -17,6 +17,7 @@ const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
 let currentUser: AuthUser | null = null;
 let authInitialized = false;
 let authListeners: Array<(user: AuthUser | null) => void> = [];
+let authInitialized = false;
 
 function notifyListeners(user: AuthUser | null) {
   currentUser = user;
@@ -54,13 +55,15 @@ function toAuthError(error: unknown): AuthError {
 
 async function apiFetch(path: string, options: RequestInit = {}): Promise<any> {
   const response = await fetch(`${API_URL}${path}`, {
+    ...options,
+    credentials: "include",
     headers: {
       "Content-Type": "application/json",
       ...(getAccessToken()
         ? { Authorization: `Bearer ${getAccessToken()}` }
         : {}),
+      ...options.headers,
     },
-    ...options,
   });
 
   const data = await response.json().catch(() => null);
@@ -85,21 +88,46 @@ export function createAuthAdapter(): AuthAdapter {
   authListeners = [];
   authInitialized = false;
 
-  // Try to restore session on init
-  (async () => {
-    try {
-      if (getAccessToken()) {
+  setAuthSessionExpiredHandler(() => {
+    clearTokens();
+    notifyListeners(null);
+  });
+
+  if (localStorage.getItem("auth:logout-pending") === "true") {
+    void (async () => {
+      try {
+        await apiFetch("/api/auth/logout/", {
+          method: "POST",
+        });
+
+        localStorage.removeItem("auth:logout-pending");
+      } catch {
+        // Keep the marker and retry on a future startup.
+      }
+
+      notifyListeners(null);
+    })();
+  } else {
+    // Try to restore session on init
+    void (async () => {
+      try {
+        if (!getAccessToken()) {
+          const refreshed = await refreshAccessToken();
+
+          if (!refreshed) {
+            notifyListeners(null);
+            return;
+          }
+        }
+
         const user = await fetchCurrentUser();
         notifyListeners(user);
       } else {
         notifyListeners(null);
         authInitialized = true;
       }
-    } catch {
-      clearTokens();
-      notifyListeners(null);
-    }
-  })();
+    })();
+  }
 
   return {
     async signInWithEmail(email: string, password: string) {
@@ -109,7 +137,8 @@ export function createAuthAdapter(): AuthAdapter {
           body: JSON.stringify({ email, password }),
         });
 
-        setTokens(data.access, data.refresh);
+        setTokens(data.access);
+        localStorage.removeItem("auth:logout-pending");
         const user = await fetchCurrentUser();
         notifyListeners(user);
 
@@ -135,7 +164,8 @@ export function createAuthAdapter(): AuthAdapter {
           }),
         });
 
-        setTokens(data.access, data.refresh);
+        setTokens(data.access);
+        localStorage.removeItem("auth:logout-pending");
         const user = await fetchCurrentUser();
         notifyListeners(user);
 

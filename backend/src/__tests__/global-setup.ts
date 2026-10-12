@@ -19,6 +19,7 @@ import { TEST_DATABASE_URL } from './database-url.js'
 // the main process, so it is read from there and passed to Prisma explicitly.
 // Both come from TEST_DATABASE_URL so the schema push and the tests can never
 // target different databases.
+
 const DATABASE_URL = process.env.DATABASE_URL ?? TEST_DATABASE_URL
 
 /** Absolute path of a `file:` SQLite URL, or null for any other database. */
