@@ -88,7 +88,15 @@ export function AuthProvider({ children }: Props) {
 
   const signOut = useCallback(async () => {
     setError(null);
-    await adapter.signOut();
+
+    try {
+      await adapter.signOut();
+    } catch {
+      setError({
+        code: "auth/logout-failed",
+        message: "Logout could not be confirmed by the server.",
+      });
+    }
   }, []);
 
   const sendPasswordResetEmail = useCallback(async (email: string) => {

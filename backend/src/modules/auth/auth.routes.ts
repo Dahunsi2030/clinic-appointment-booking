@@ -156,14 +156,15 @@ registry.registerPath({
   path: '/api/auth/logout/',
   operationId: 'auth_logout_create',
   tags: TAGS,
-  security: SECURED,
+  security: [],
   description: 'Log the current user out.',
   request: { body: jsonContent(LogoutSchema) },
   responses: {
     200: { description: 'Logged out.', ...jsonContent(DetailSchema) },
   },
 })
-authRouter.post('/logout/', authenticate, validateBody(LogoutSchema), controller.logout)
+
+authRouter.post('/logout/', validateBody(LogoutSchema), controller.logout)
 
 // ── POST /api/auth/refresh/ ────────────────────────────────────────────
 registry.registerPath({
