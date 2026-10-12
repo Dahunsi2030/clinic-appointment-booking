@@ -8,7 +8,7 @@
  */
 
 import type { AuthAdapter, AuthUser, AuthError, SocialProvider } from "./types";
-import { setTokens, getAccessToken, clearTokens } from "@/api/client";
+import { setTokens, getAccessToken, clearTokens, refreshAccessToken } from "@/api/client";
 import { parseApiError } from "@/shared/hooks/api-error";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
@@ -90,22 +90,12 @@ export function createAuthAdapter(): AuthAdapter {
   (async () => {
     try {
       if (!getAccessToken()) {
-        const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:8000'}/api/auth/refresh/`,
-          {
-            method: "POST",
-            credentials: 'include',
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({}),
-          },
-        );
+        const refreshed = await refreshAccessToken();
 
-        if (!response.ok) {
+        if (!refreshed) {
           notifyListeners(null);
           return;
         }
-
-        const data = await response.json();
-        setTokens(data.access);
       }
 
       const user = await fetchCurrentUser();
@@ -200,13 +190,10 @@ export function createAuthAdapter(): AuthAdapter {
     },
 
     async signOut(): Promise<void> {
-      try {
-        await apiFetch("/api/auth/logout/", {
+      await apiFetch("/api/auth/logout/", {
           method: "POST",
-        });
-      } catch {
-        // Ignore errors on logout
-      }
+      });
+
       clearTokens();
       notifyListeners(null);
     },

@@ -10,6 +10,7 @@
 import type { Request, Response } from 'express'
 import { requireUser } from '../../middleware/authenticate.js'
 import * as authService from './auth.service.js'
+import { env } from '../../config/env.js'
 
 
 const REFRESH_COOKIE = "refresh_token";
@@ -26,7 +27,7 @@ function setRefreshCookie(res: Response, refresh: string) {
   res.cookie(REFRESH_COOKIE, refresh, {
     ...refreshCookieOptions,
     // Match the backend's configured refresh-token lifetime.
-    maxAge: 7 * 24 * 60 * 60 * 1000,
+    maxAge: env.REFRESH_TOKEN_LIFETIME_DAYS * 24 * 60 * 60 * 1000, // days to milliseconds
   });
 }
 

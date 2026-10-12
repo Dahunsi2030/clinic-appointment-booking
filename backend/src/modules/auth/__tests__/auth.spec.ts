@@ -240,6 +240,37 @@ describe('POST /api/auth/refresh/', () => {
   })
 })
 
+describe('POST /api/auth/logout/', () => {
+  it('clears the refresh cookie without requiring a valid access token', async () => {
+    const user = await createUser()
+    const login = await api()
+      .post('/api/auth/login/')
+      .send({ email: user.email, password: TEST_PASSWORD })
+
+    const refreshCookie = getSetCookieValues(login.headers['set-cookie'])
+      .find((value) => value.startsWith('refresh_token='))
+
+    expect(refreshCookie).toBeDefined()
+
+    const response = await api()
+      .post('/api/auth/logout/')
+      .set('Cookie', refreshCookie!.split(';', 1)[0])
+      .send({})
+
+    expect(response.status).toBe(200)
+
+    const clearedCookies = getSetCookieValues(response.headers['set-cookie'])
+    expect(
+      clearedCookies.some(
+        (value) =>
+          value.startsWith('refresh_token=') &&
+          /httponly/i.test(value) &&
+          /expires=Thu, 01 Jan 1970/i.test(value),
+      ),
+    ).toBe(true)
+  })
+})
+
 describe('POST /api/auth/forgot-password/', () => {
   it('reports success for an unknown email, to avoid enumeration', async () => {
     const response = await api()

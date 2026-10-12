@@ -17,6 +17,8 @@ export const client = createClient({
   baseUrl: import.meta.env.VITE_API_URL || 'http://localhost:8000',
 })
 
+const retryRequests = new WeakMap<Request, Request>()
+
 // In-memory token storage (more secure than localStorage)
 let accessToken: string | null = null
 
@@ -86,22 +88,49 @@ async function attemptTokenRefresh(): Promise<boolean> {
 }
 
 
-client.interceptors.response.use(async (response) => {
-  if (response.status === 401 && !response.url.includes('/api/auth/refresh/')) {
-    if (!isRefreshing) {
-      isRefreshing = true
-      refreshPromise = attemptTokenRefresh().finally(() => {
-        isRefreshing = false
-        refreshPromise = null
-      })
-    }
-
-    const refreshed = await refreshPromise
-    if (!refreshed) {
-      clearTokens()
-      window.dispatchEvent(new CustomEvent('auth:logout'))
-    }
+export async function refreshAccessToken(): Promise<boolean> {
+  if (!isRefreshing) {
+    isRefreshing = true;
+    refreshPromise = attemptTokenRefresh().finally(() => {
+      isRefreshing = false;
+      refreshPromise = null;
+    });
   }
-  return response
+
+  return refreshPromise!;
+}
+
+
+
+client.interceptors.response.use(async (response, request) => {
+  if (
+    response.status !== 401 ||
+    response.url.includes('/api/auth/refresh/') ||
+    request.url.includes('/api/auth/refresh/')
+  ) {
+    return response
+  }
+
+  const refreshed = await refreshAccessToken()
+
+  if (!refreshed || !accessToken) {
+    clearTokens()
+    window.dispatchEvent(new CustomEvent('auth:logout'))
+    return response
+  }
+
+  const retryRequest = retryRequests.get(request)
+
+  if (!retryRequest) {
+    return response
+  }
+
+  retryRequest.headers.set('Authorization', `Bearer ${accessToken}`)
+
+  return fetch(retryRequest)
 })
 
+client.interceptors.request.use((request) => {
+  retryRequests.set(request, request.clone())
+  return request
+})
