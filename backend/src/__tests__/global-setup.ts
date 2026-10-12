@@ -35,8 +35,16 @@ export default function setup(): void {
     fs.rmSync(`${dbFile}-journal`, { force: true })
   }
 
-  execFileSync('npx', ['prisma', 'db', 'push', '--skip-generate'], {
-    stdio: 'inherit',
-    env: { ...process.env, DATABASE_URL },
-  })
+  execFileSync(
+    process.platform === 'win32' ? 'npx.cmd' : 'npx',
+    ['prisma', 'db', 'push', '--skip-generate'],
+    {
+      stdio: 'inherit',
+      env: {
+        ...process.env,
+        DATABASE_URL,
+      },
+      shell: process.platform === 'win32',
+    },
+  )
 }

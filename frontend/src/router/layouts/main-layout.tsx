@@ -34,10 +34,12 @@ export function MainLayout() {
 
   const isDark = colorMode === 'dark'
 
-  const handleLogout = () => {
-    logout()
-    navigate(Path.Login)
-  }
+
+  const handleLogout = async () => {
+    await logout();
+    navigate(Path.Login, { replace: true });
+  };
+
 
   return (
     <div className="flex min-h-screen flex-col bg-background">

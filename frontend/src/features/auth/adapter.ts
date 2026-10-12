@@ -8,17 +8,19 @@
  */
 
 import type { AuthAdapter, AuthUser, AuthError, SocialProvider } from "./types";
-import { setTokens, getAccessToken, clearTokens } from "@/api/client";
+import { setTokens, getAccessToken, clearTokens, getRefreshToken } from "@/api/client";
 import { parseApiError } from "@/shared/hooks/api-error";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
 // Internal state
 let currentUser: AuthUser | null = null;
+let authInitialized = false;
 let authListeners: Array<(user: AuthUser | null) => void> = [];
 
 function notifyListeners(user: AuthUser | null) {
   currentUser = user;
+  authInitialized = true;
   authListeners.forEach((cb) => cb(user));
 }
 
@@ -81,6 +83,7 @@ async function fetchCurrentUser(): Promise<AuthUser> {
 export function createAuthAdapter(): AuthAdapter {
   currentUser = null;
   authListeners = [];
+  authInitialized = false;
 
   // Try to restore session on init
   (async () => {
@@ -88,6 +91,9 @@ export function createAuthAdapter(): AuthAdapter {
       if (getAccessToken()) {
         const user = await fetchCurrentUser();
         notifyListeners(user);
+      } else {
+        notifyListeners(null);
+        authInitialized = true;
       }
     } catch {
       clearTokens();
@@ -179,15 +185,27 @@ export function createAuthAdapter(): AuthAdapter {
     },
 
     async signOut(): Promise<void> {
-      try {
-        await apiFetch("/api/auth/logout/", {
-          method: "POST",
-        });
-      } catch {
-        // Ignore errors on logout
-      }
+      const accessToken = getAccessToken();
+      const refresh = getRefreshToken();
+
+      // End this browser's session immediately.
       clearTokens();
       notifyListeners(null);
+
+      try {
+        await fetch(`${API_URL}/api/auth/logout/`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            ...(accessToken
+              ? { Authorization: `Bearer ${accessToken}` }
+              : {}),
+          },
+          body: JSON.stringify({ refresh }),
+        });
+      } catch {
+        // Local sign-out must still succeed if the server is unavailable.
+      }
     },
 
     getCurrentUser(): AuthUser | null {
@@ -197,7 +215,9 @@ export function createAuthAdapter(): AuthAdapter {
     onAuthStateChanged(callback: (user: AuthUser | null) => void): () => void {
       authListeners.push(callback);
       // Fire immediately with current state
-      callback(currentUser);
+      if (authInitialized) {
+        callback(currentUser);
+      }
 
       return () => {
         authListeners = authListeners.filter((cb) => cb !== callback);
