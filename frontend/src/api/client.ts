@@ -22,6 +22,12 @@ const retryRequests = new WeakMap<Request, Request>()
 // In-memory token storage (more secure than localStorage)
 let accessToken: string | null = null
 
+let onAuthSessionExpired: (() => void) | null = null
+
+export function setAuthSessionExpiredHandler(handler: (() => void) | null) {
+  onAuthSessionExpired = handler
+}
+
 export function setTokens(access: string | null) {
   accessToken = access
 }
@@ -59,7 +65,6 @@ client.interceptors.request.use((request) => {
 let isRefreshing = false
 let refreshPromise: Promise<boolean> | null = null
 
-
 async function attemptTokenRefresh(): Promise<boolean> {
   try {
     const response = await fetch(
@@ -87,7 +92,6 @@ async function attemptTokenRefresh(): Promise<boolean> {
   }
 }
 
-
 export async function refreshAccessToken(): Promise<boolean> {
   if (!isRefreshing) {
     isRefreshing = true;
@@ -99,8 +103,6 @@ export async function refreshAccessToken(): Promise<boolean> {
 
   return refreshPromise!;
 }
-
-
 
 client.interceptors.response.use(async (response, request) => {
   if (
@@ -115,7 +117,7 @@ client.interceptors.response.use(async (response, request) => {
 
   if (!refreshed || !accessToken) {
     clearTokens()
-    window.dispatchEvent(new CustomEvent('auth:logout'))
+    onAuthSessionExpired?.()
     return response
   }
 

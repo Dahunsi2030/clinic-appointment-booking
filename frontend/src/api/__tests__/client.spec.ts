@@ -1,8 +1,11 @@
-
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { clearTokens, client, getAccessToken, setTokens } from '../client';
-
-
+import {
+  clearTokens,
+  client,
+  getAccessToken,
+  setTokens,
+  setAuthSessionExpiredHandler,
+} from '../client';
 
 describe('API client token refresh', () => {
   const originalFetch = globalThis.fetch;
@@ -18,7 +21,8 @@ describe('API client token refresh', () => {
   });
 
   it('refreshes the access token and retries the original request after a 401', async () => {
-    const fetchMock = vi.fn()
+    const fetchMock = vi
+      .fn()
       .mockResolvedValueOnce(
         new Response(JSON.stringify({ detail: 'Unauthorized' }), {
           status: 401,
@@ -53,5 +57,40 @@ describe('API client token refresh', () => {
     expect(retriedRequest?.headers.get('Authorization')).toBe(
       'Bearer new-access-token',
     );
+  });
+
+  it('clears the token and notifies the auth handler when refresh fails', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ detail: 'Unauthorized' }), {
+          status: 401,
+          headers: { 'Content-Type': 'application/json' },
+        }),
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ detail: 'Refresh failed' }), {
+          status: 401,
+          headers: { 'Content-Type': 'application/json' },
+        }),
+      );
+
+    const expiredHandler = vi.fn();
+
+    globalThis.fetch = fetchMock;
+    setTokens('expired-access-token');
+    setAuthSessionExpiredHandler(expiredHandler);
+
+    try {
+      await client.get({
+        url: 'http://localhost:8000/api/example/',
+      } as any);
+
+      expect(getAccessToken()).toBeNull();
+      expect(expiredHandler).toHaveBeenCalledOnce();
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+    } finally {
+      setAuthSessionExpiredHandler(null);
+    }
   });
 });
