@@ -76,7 +76,7 @@ describe('GI-003: sign out on a shared machine', () => {
     setTokens('access-token')
     const adapter = createAuthAdapter()
 
-    await expect(adapter.signOut()).resolves.toBeUndefined()
+    await expect(adapter.signOut()).rejects.toThrow("Network error");
 
     expect(getAccessToken()).toBeNull()
     expect(adapter.getCurrentUser()).toBeNull()

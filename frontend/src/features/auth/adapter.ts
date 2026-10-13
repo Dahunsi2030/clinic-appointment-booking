@@ -222,28 +222,30 @@ export function createAuthAdapter(): AuthAdapter {
     async signOut(): Promise<void> {
       const accessToken = getAccessToken();
 
-      // End this browser's session immediately.
-      localStorage.setItem("auth:logout-pending", "true");
+      // Clear this browser's session immediately.
       clearTokens();
       notifyListeners(null);
 
       try {
-        await fetch(`${API_URL}/api/auth/logout/`, {
+        const response = await fetch(`${API_URL}/api/auth/logout/`, {
           method: "POST",
           credentials: "include",
-          headers: {
-            "Content-Type": "application/json",
-            ...(accessToken
-              ? { Authorization: `Bearer ${accessToken}` }
-              : {}),
-          },
+          ...(accessToken
+            ? { headers: { Authorization: `Bearer ${accessToken}` } }
+            : {}),
         });
+
+        if (!response.ok) {
+          throw new Error(`Logout request failed (${response.status})`);
+        }
+
         localStorage.removeItem("auth:logout-pending");
-      } catch {
-        // Local sign-out must still succeed if the server is unavailable.
+      } catch (error) {
+        // Remember the failed server logout for a later retry.
+        localStorage.setItem("auth:logout-pending", "true");
+        throw error;
       }
     },
-
     getCurrentUser(): AuthUser | null {
       return currentUser;
     },
