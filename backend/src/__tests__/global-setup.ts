@@ -37,18 +37,15 @@ export default function setup(): void {
   }
 
   execFileSync(
-    process.execPath,
-    [
-      "./node_modules/prisma/build/index.js",
-      "db",
-      "push",
-      "--skip-generate",
-    ],
+    process.platform === 'win32' ? 'npx.cmd' : 'npx',
+    ['prisma', 'db', 'push', '--skip-generate'],
     {
+      stdio: 'inherit',
       env: {
         ...process.env,
         DATABASE_URL,
       },
+      shell: process.platform === 'win32',
     },
-  );
+  )
 }
