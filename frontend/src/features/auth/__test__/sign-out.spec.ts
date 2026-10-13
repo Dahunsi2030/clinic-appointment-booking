@@ -20,6 +20,7 @@ function jsonResponse(data: unknown, status = 200): Response {
 describe('GI-003: sign out on a shared machine', () => {
   beforeEach(() => {
     clearTokens()
+    localStorage.clear()
     vi.stubGlobal(
       'fetch',
       vi.fn().mockResolvedValue(jsonResponse({ detail: 'Successfully logged out.' })),
@@ -28,6 +29,7 @@ describe('GI-003: sign out on a shared machine', () => {
 
   afterEach(() => {
     clearTokens()
+    localStorage.clear()
     vi.unstubAllGlobals()
     vi.restoreAllMocks()
   })
@@ -53,21 +55,19 @@ describe('GI-003: sign out on a shared machine', () => {
 
     await adapter.signOut()
 
-    const logoutRequest = vi.mocked(fetch).mock.calls
-      .map(([input]) => input)
-      .find(
-        (input): input is Request =>
-          input instanceof Request &&
-          input.url.endsWith('/api/auth/logout/'),
-      )
+    const logoutCall = vi.mocked(fetch).mock.calls.find(
+      ([input]) => requestUrl(input).endsWith('/api/auth/logout/'),
+    )
 
-    expect(logoutRequest).toBeInstanceOf(Request)
-    if (!(logoutRequest instanceof Request)) {
+    expect(logoutCall).toBeDefined()
+    if (!logoutCall) {
       throw new Error('The logout request was not sent.')
     }
-    expect(logoutRequest.method).toBe('POST')
-    expect(logoutRequest.credentials).toBe('include')
-    expect(logoutRequest.body).toBeNull()
+    expect(logoutCall[1]).toMatchObject({
+      method: 'POST',
+      credentials: 'include',
+    })
+    expect(logoutCall[1]).not.toHaveProperty('body')
   })
 
   it('still clears the local session if the server request fails', async () => {
@@ -83,7 +83,7 @@ describe('GI-003: sign out on a shared machine', () => {
   })
 
   it('restores a session from the HttpOnly refresh cookie after a reload', async () => {
-    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+    const fetchMock = vi.fn<typeof fetch>(async (input, _init) => {
       const url = requestUrl(input)
 
       if (url.endsWith('/api/auth/refresh/')) {
@@ -113,21 +113,18 @@ describe('GI-003: sign out on a shared machine', () => {
       )
     })
 
-    const refreshRequest = fetchMock.mock.calls
-      .map(([input]) => input)
-      .find(
-        (input): input is Request =>
-          input instanceof Request &&
-          input.url.endsWith('/api/auth/refresh/'),
-      )
+    const refreshCall = fetchMock.mock.calls.find(
+      ([input]) => requestUrl(input).endsWith('/api/auth/refresh/'),
+    )
 
-    expect(refreshRequest).toBeInstanceOf(Request)
-    if (!(refreshRequest instanceof Request)) {
+    expect(refreshCall).toBeDefined()
+    if (!refreshCall) {
       throw new Error('The refresh request was not sent.')
     }
-    expect(refreshRequest.method).toBe('POST')
-    expect(refreshRequest.credentials).toBe('include')
-    expect(refreshRequest.body).toBeNull()
+    expect(refreshCall[1]).toMatchObject({
+      method: 'POST',
+      credentials: 'include',
+    })
     expect(getAccessToken()).toBe('restored-access-token')
   })
 })
