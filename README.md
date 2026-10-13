@@ -55,7 +55,7 @@ The whole product: an API and the screens that use it.
 - **Express 5** in **TypeScript** for the API.
 - **Prisma** for the models and the migrations, against the schema in `prisma/schema.prisma`.
 - **Zod** for validating every request, and **zod-to-openapi** for the OpenAPI schema, served at `/api/schema/` and browsable at `/api/docs/`.
-- **JWT** for authentication, in `src/modules/auth`.
+- **JWT** for authentication, with in-memory access tokens and an HttpOnly refresh cookie, in `src/modules/auth`.
 - **React** with **Vite** for the dev server and the build.
 - **Chakra UI** for components, and **React Router** for routes.
 - **TanStack Query** for every call to the API, so caching and refetching are decided in one place.

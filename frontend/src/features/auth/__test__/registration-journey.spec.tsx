@@ -20,6 +20,10 @@ function renderApp(initialEntry = "/") {
   );
 }
 
+function requestUrl(input: RequestInfo | URL): string {
+  return input instanceof Request ? input.url : String(input);
+}
+
 describe("Registration journey", () => {
   beforeEach(() => {
     localStorage.clear();
@@ -37,13 +41,12 @@ describe("Registration journey", () => {
     const fetchMock = vi
       .spyOn(globalThis, "fetch")
       .mockImplementation(async (input) => {
-        const url = String(input);
+        const url = requestUrl(input);
 
         if (url.endsWith("/api/auth/register/")) {
           return new Response(
             JSON.stringify({
               access: "mockAccessToken",
-              refresh: "mockRefreshToken",
             }),
             {
               status: 201,
@@ -104,7 +107,7 @@ describe("Registration journey", () => {
 
     expect(
       fetchMock.mock.calls.some(([input]) =>
-        String(input).endsWith("/api/auth/login/"),
+        requestUrl(input).endsWith("/api/auth/login/"),
       ),
     ).toBe(false);
   });
@@ -113,7 +116,7 @@ describe("Registration journey", () => {
     const user = userEvent.setup();
 
     vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
-      const url = String(input);
+      const url = requestUrl(input);
 
       if (url.endsWith("/api/auth/register/")) {
         return new Response(
@@ -150,7 +153,7 @@ describe("Registration journey", () => {
     const user = userEvent.setup();
 
     vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
-      const url = String(input);
+      const url = requestUrl(input);
 
       if (url.endsWith("/api/auth/register/")) {
         return new Response(
