@@ -20,35 +20,35 @@ function renderApp(initialEntry = "/") {
   );
 }
 
+function requestUrl(input: RequestInfo | URL): string {
+  return input instanceof Request ? input.url : String(input);
+}
+
 describe("GI-003: protected navigation after sign-out", () => {
   beforeEach(() => {
     clearTokens();
     localStorage.clear();
 
     vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
-      const url = String(input);
+      const url = requestUrl(input);
 
       if (url.endsWith("/api/auth/me/")) {
-        return {
-          ok: true,
-          status: 200,
-          statusText: "OK",
-          json: async () => ({
+        return new Response(
+          JSON.stringify({
             id: 1,
             email: "patient@example.com",
             first_name: "Test",
             last_name: "Patient",
           }),
-        } as Response;
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        );
       }
 
       if (url.endsWith("/api/auth/logout/")) {
-        return {
-          ok: true,
-          status: 200,
-          statusText: "OK",
-          json: async () => ({ detail: "Successfully logged out." }),
-        } as Response;
+        return new Response(
+          JSON.stringify({ detail: "Successfully logged out." }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        );
       }
 
       throw new Error(`Unexpected fetch request: ${url}`);
@@ -72,7 +72,7 @@ describe("GI-003: protected navigation after sign-out", () => {
   it("signs out and removes the private dashboard content", async () => {
     const user = userEvent.setup();
 
-    setTokens("test-access-token", "test-refresh-token");
+    setTokens("test-access-token");
     renderApp("/dashboard");
 
     expect(

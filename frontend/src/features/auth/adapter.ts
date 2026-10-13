@@ -8,7 +8,13 @@
  */
 
 import type { AuthAdapter, AuthUser, AuthError, SocialProvider } from "./types";
-import { setTokens, getAccessToken, clearTokens, getRefreshToken } from "@/api/client";
+import {
+  setTokens,
+  getAccessToken,
+  clearTokens,
+  refreshAccessToken,
+  setAuthSessionExpiredHandler,
+} from "@/api/client";
 import { parseApiError } from "@/shared/hooks/api-error";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
@@ -17,7 +23,6 @@ const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
 let currentUser: AuthUser | null = null;
 let authInitialized = false;
 let authListeners: Array<(user: AuthUser | null) => void> = [];
-let authInitialized = false;
 
 function notifyListeners(user: AuthUser | null) {
   currentUser = user;
@@ -122,9 +127,9 @@ export function createAuthAdapter(): AuthAdapter {
 
         const user = await fetchCurrentUser();
         notifyListeners(user);
-      } else {
+      } catch {
+        clearTokens();
         notifyListeners(null);
-        authInitialized = true;
       }
     })();
   }
@@ -216,23 +221,24 @@ export function createAuthAdapter(): AuthAdapter {
 
     async signOut(): Promise<void> {
       const accessToken = getAccessToken();
-      const refresh = getRefreshToken();
 
       // End this browser's session immediately.
+      localStorage.setItem("auth:logout-pending", "true");
       clearTokens();
       notifyListeners(null);
 
       try {
         await fetch(`${API_URL}/api/auth/logout/`, {
           method: "POST",
+          credentials: "include",
           headers: {
             "Content-Type": "application/json",
             ...(accessToken
               ? { Authorization: `Bearer ${accessToken}` }
               : {}),
           },
-          body: JSON.stringify({ refresh }),
         });
+        localStorage.removeItem("auth:logout-pending");
       } catch {
         // Local sign-out must still succeed if the server is unavailable.
       }
