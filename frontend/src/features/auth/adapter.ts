@@ -220,8 +220,9 @@ export function createAuthAdapter(): AuthAdapter {
     },
 
     async signOut(): Promise<void> {
-      const accessToken = getAccessToken();
       localStorage.setItem("auth:logout-pending", "true");
+
+      const accessToken = getAccessToken();
 
       // Clear this browser's session immediately.
       clearTokens();
