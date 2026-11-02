@@ -157,6 +157,87 @@ describe('GI-002: Session persistence', () => {
     expect(screen.queryByText('patient@example.com')).not.toBeInTheDocument();
   });
 
+  it('does not restore the session when a reload happens during sign-out', async () => {
+    setTokens('existing-access-token');
+
+    let resolveFirstLogout!: (response: Response) => void;
+    const firstLogoutResponse = new Promise<Response>((resolve) => {
+      resolveFirstLogout = resolve;
+    });
+    let logoutRequestCount = 0;
+    const fetchMock = vi.fn().mockImplementation(async (input: RequestInfo | URL) => {
+      const url = String(input);
+
+      if (url.includes('/api/auth/logout/')) {
+        logoutRequestCount += 1;
+        return logoutRequestCount === 1
+          ? firstLogoutResponse
+          : new Response(null, { status: 204 });
+      }
+
+      if (url.includes('/api/auth/refresh/')) {
+        return new Response(
+          JSON.stringify({ access: 'restored-access-token' }),
+          {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+          },
+        );
+      }
+
+      if (url.includes('/api/auth/me/')) {
+        return new Response(JSON.stringify(patient), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+
+      return new Response(JSON.stringify({ detail: 'Not found' }), {
+        status: 404,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    });
+
+    vi.stubGlobal('fetch', fetchMock);
+
+    const adapter = createAuthAdapter();
+    await waitFor(() => {
+      expect(adapter.getCurrentUser()?.email).toBe('patient@example.com');
+    });
+
+    fetchMock.mockClear();
+    const signOutPromise = adapter.signOut();
+
+    try {
+      await waitFor(() => {
+        expect(fetchMock).toHaveBeenCalledWith(
+          expect.stringContaining('/api/auth/logout/'),
+          expect.objectContaining({ method: 'POST' }),
+        );
+      });
+
+      expect(localStorage.getItem('auth:logout-pending')).toBe('true');
+
+      createAuthAdapter();
+
+      expect(fetchMock).toHaveBeenCalledWith(
+        expect.stringContaining('/api/auth/logout/'),
+        expect.objectContaining({ method: 'POST' }),
+      );
+      expect(fetchMock).not.toHaveBeenCalledWith(
+        expect.stringContaining('/api/auth/refresh/'),
+        expect.any(Object),
+      );
+      expect(fetchMock).not.toHaveBeenCalledWith(
+        expect.stringContaining('/api/auth/me/'),
+        expect.any(Object),
+      );
+    } finally {
+      resolveFirstLogout(new Response(null, { status: 204 }));
+      await signOutPromise;
+    }
+  });
+
   it('signs the patient out locally when the server logout fails', async () => {
     setTokens('existing-access-token');
 
