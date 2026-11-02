@@ -221,6 +221,7 @@ export function createAuthAdapter(): AuthAdapter {
 
     async signOut(): Promise<void> {
       const accessToken = getAccessToken();
+      localStorage.setItem("auth:logout-pending", "true");
 
       // Clear this browser's session immediately.
       clearTokens();
@@ -241,8 +242,6 @@ export function createAuthAdapter(): AuthAdapter {
 
         localStorage.removeItem("auth:logout-pending");
       } catch (error) {
-        // Remember the failed server logout for a later retry.
-        localStorage.setItem("auth:logout-pending", "true");
         throw error;
       }
     },
