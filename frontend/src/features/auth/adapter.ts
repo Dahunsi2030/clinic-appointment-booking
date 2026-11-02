@@ -21,8 +21,8 @@ const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
 // Internal state
 let currentUser: AuthUser | null = null;
-let authListeners: Array<(user: AuthUser | null) => void> = [];
 let authInitialized = false;
+let authListeners: Array<(user: AuthUser | null) => void> = [];
 
 function notifyListeners(user: AuthUser | null) {
   currentUser = user;
@@ -91,6 +91,7 @@ async function fetchCurrentUser(): Promise<AuthUser> {
 export function createAuthAdapter(): AuthAdapter {
   currentUser = null;
   authListeners = [];
+  authInitialized = false;
 
   setAuthSessionExpiredHandler(() => {
     clearTokens();
@@ -219,25 +220,32 @@ export function createAuthAdapter(): AuthAdapter {
     },
 
     async signOut(): Promise<void> {
-      localStorage.setItem("auth:logout-pending", "true");
+      const accessToken = getAccessToken();
 
+      // Clear this browser's session immediately.
       clearTokens();
       notifyListeners(null);
 
       try {
-        await apiFetch("/api/auth/logout/", {
+        const response = await fetch(`${API_URL}/api/auth/logout/`, {
           method: "POST",
-          body: JSON.stringify({}),
+          credentials: "include",
+          ...(accessToken
+            ? { headers: { Authorization: `Bearer ${accessToken}` } }
+            : {}),
         });
+
+        if (!response.ok) {
+          throw new Error(`Logout request failed (${response.status})`);
+        }
 
         localStorage.removeItem("auth:logout-pending");
       } catch (error) {
-        // Keep the marker so startup can retry server logout
-        // without restoring the previous session.
+        // Remember the failed server logout for a later retry.
+        localStorage.setItem("auth:logout-pending", "true");
         throw error;
       }
     },
-
     getCurrentUser(): AuthUser | null {
       return currentUser;
     },

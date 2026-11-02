@@ -34,9 +34,14 @@ export function MainLayout() {
 
   const isDark = colorMode === 'dark'
 
-  const handleLogout = () => {
-    logout()
-    navigate(Path.Login)
+  const handleLogout = async () => {
+    try {
+      await logout()
+    } catch {
+      // Local session is already cleared; pending logout will be retried.
+    } finally {
+      navigate(Path.Login, { replace: true })
+    }
   }
 
   return (
