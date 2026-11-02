@@ -228,23 +228,19 @@ export function createAuthAdapter(): AuthAdapter {
       clearTokens();
       notifyListeners(null);
 
-      try {
-        const response = await fetch(`${API_URL}/api/auth/logout/`, {
-          method: "POST",
-          credentials: "include",
-          ...(accessToken
-            ? { headers: { Authorization: `Bearer ${accessToken}` } }
-            : {}),
-        });
+      const response = await fetch(`${API_URL}/api/auth/logout/`, {
+        method: "POST",
+        credentials: "include",
+        ...(accessToken
+          ? { headers: { Authorization: `Bearer ${accessToken}` } }
+          : {}),
+      });
 
-        if (!response.ok) {
-          throw new Error(`Logout request failed (${response.status})`);
-        }
-
-        localStorage.removeItem("auth:logout-pending");
-      } catch (error) {
-        throw error;
+      if (!response.ok) {
+        throw new Error(`Logout request failed (${response.status})`);
       }
+
+      localStorage.removeItem("auth:logout-pending");
     },
     getCurrentUser(): AuthUser | null {
       return currentUser;
