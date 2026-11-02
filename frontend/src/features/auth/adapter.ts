@@ -220,31 +220,27 @@ export function createAuthAdapter(): AuthAdapter {
     },
 
     async signOut(): Promise<void> {
+      localStorage.setItem("auth:logout-pending", "true");
+
       const accessToken = getAccessToken();
 
       // Clear this browser's session immediately.
       clearTokens();
       notifyListeners(null);
 
-      try {
-        const response = await fetch(`${API_URL}/api/auth/logout/`, {
-          method: "POST",
-          credentials: "include",
-          ...(accessToken
-            ? { headers: { Authorization: `Bearer ${accessToken}` } }
-            : {}),
-        });
+      const response = await fetch(`${API_URL}/api/auth/logout/`, {
+        method: "POST",
+        credentials: "include",
+        ...(accessToken
+          ? { headers: { Authorization: `Bearer ${accessToken}` } }
+          : {}),
+      });
 
-        if (!response.ok) {
-          throw new Error(`Logout request failed (${response.status})`);
-        }
-
-        localStorage.removeItem("auth:logout-pending");
-      } catch (error) {
-        // Remember the failed server logout for a later retry.
-        localStorage.setItem("auth:logout-pending", "true");
-        throw error;
+      if (!response.ok) {
+        throw new Error(`Logout request failed (${response.status})`);
       }
+
+      localStorage.removeItem("auth:logout-pending");
     },
     getCurrentUser(): AuthUser | null {
       return currentUser;
